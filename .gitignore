@@ -1,0 +1,15 @@
+﻿node_modules/
+__pycache__/
+.env
+*.pyc
+src_broken/
+static/
+index_restored.html
+index_backup.html
+index_clean.html
+check_index.html
+index_new.html
+current_index.html
+check_swarm.py
+swarm-ags-temp/
+swarm-ags-temp-pack/
