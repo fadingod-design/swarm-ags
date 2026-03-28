@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>蜂群AGS - 实时监控台</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { 
+  font-family: 'Inter', -apple-system, sans-serif; 
+  background: linear-gradient(135deg, #e8ecf1 0%, #d4dce6 50%, #c9d3df 100%);
+  color: #2d3748;
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(0,0,0,0.03); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px; }
+
+.card {
+  background: rgba(255,255,255,0.75);
+  backdrop-filter: blur(15px);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.6);
+  box-shadow: 0 2px 15px rgba(0,0,0,0.04);
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.status-dot.running { background: #d4a853; animation: pulse 1.5s infinite; }
+.status-dot.done { background: #5bb085; }
+.status-dot.idle { background: #a0aec0; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* 圆形进度条 */
+.circle-progress {
+  position: relative;
+  display: inline-block;
+}
+
+.circle-progress svg {
+  transform: rotate(-90deg);
+}
+
+.circle-progress .progress-bg {
+  fill: none;
+  stroke: rgba(0,0,0,0.06);
+}
+
+.circle-progress .progress-bar {
+  fill: none;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.5s ease;
+}
+
+.circle-progress .progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-weight: 700;
+  text-align: center;
+}
+
+/* 条状进度条 - 恢复 */
+.bar-progress {
+  height: 6px;
+  background: rgba(0,0,0,0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.bar-progress .bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.agent-row {
+  padding: 18px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.5);
+  margin-bottom: 10px;
+  transition: all 0.2s ease;
+}
+
+.agent-row:hover {
+  background: rgba(255,255,255,0.8);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.log-panel {
+  background: rgba(255,255,255,0.4);
+  border-radius: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+
+.log-line {
+  padding: 9px 13px;
+  border-bottom: 1px solid rgba(0,0,0,0.02);
+  color: #6b7280;
+}
+
+.log-line:last-child { border-bottom: none; }
+.log-line.success { color: #5bb085; }
+.log-line.warning { color: #d4a853; }
+.log-line.error { color: #e57373; }
+.log-line.info { color: #6b7cde; }
+
+.metric-card {
+  text-align: center;
+  padding: 18px;
+  background: rgba(255,255,255,0.5);
+  border-radius: 14px;
+  transition: all 0.3s ease;
+}
+
+.metric-card:hover {
+  background: rgba(255,255,255,0.8);
+}
+
+.metric-value {
+  font-size: 30px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #6b7cde 0%, #8b6dd4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.metric-label {
+  font-size: 10px;
+  color: #718096;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  background: rgba(91,176,133,0.12);
+  border: 1px solid rgba(91,176,133,0.25);
+  border-radius: 18px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #4a9d7a;
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  background: #5bb085;
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+
+/* 系统监控卡片 */
+.sys-monitor {
+  background: rgba(255,255,255,0.5);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.sys-monitor .label {
+  font-size: 11px;
+  color: #718096;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: justify-between;
+}
+
+.sys-monitor .value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a5568;
+}
+</style>
+</head>
+
+<body>
+<div class="max-w-[1600px] mx-auto p-5">
+
+  <!-- Header -->
+  <header class="card p-5 mb-5">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-xl flex items-center justify-center shadow-md">
+          <i data-lucide="activity" class="w-6 h-6 text-white"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold" style="color:#6b7cde">蜂群AGS Monitor</h1>
+          <p class="text-xs text-slate-500">实时监控 · Multi-Agent System</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="live-badge">
+          <div class="live-dot"></div>
+          <span>LIVE</span>
+        </div>
+        <a href="index.html" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/60 hover:bg-white transition-colors font-medium text-sm">
+          <i data-lucide="layout" class="w-4 h-4"></i>
+          控制台
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Top Metrics -->
+  <div class="grid grid-cols-5 gap-4 mb-5">
+    <div class="metric-card">
+      <div class="flex items-center justify-center gap-2 text-slate-400 mb-2">
+        <i data-lucide="zap" class="w-4 h-4"></i>
+      </div>
+      <div class="metric-value" id="total-tokens">0</div>
+      <div class="metric-label">Total Tokens</div>
+    </div>
+    
+    <div class="metric-card">
+      <div class="flex items-center justify-center gap-2 text-slate-400 mb-2">
+        <i data-lucide="users" class="w-4 h-4"></i>
+      </div>
+      <div class="metric-value" id="active-agents">0</div>
+      <div class="metric-label">Active Agents</div>
+    </div>
+    
+    <div class="metric-card">
+      <div class="flex items-center justify-center gap-2 text-slate-400 mb-2">
+        <i data-lucide="clock" class="w-4 h-4"></i>
+      </div>
+      <div class="metric-value" id="requests">0</div>
+      <div class="metric-label">Requests</div>
+    </div>
+    
+    <div class="metric-card">
+      <div class="flex items-center justify-center gap-2 text-slate-400 mb-2">
+        <i data-lucide="database" class="w-4 h-4"></i>
+      </div>
+      <div class="metric-value" id="bb-count">0</div>
+      <div class="metric-label">Blackboard</div>
+    </div>
+    
+    <div class="metric-card">
+      <div class="flex items-center justify-center gap-2 text-slate-400 mb-2">
+        <i data-lucide="timer" class="w-4 h-4"></i>
+      </div>
+      <div class="metric-value" id="runtime">0s</div>
+      <div class="metric-label">运行时间</div>
+    </div>
+  </div>
+
+  <!-- Main Grid -->
+  <div class="grid grid-cols-[1fr_360px] gap-5">
+    
+    <!-- Left: Agents + System -->
+    <div class="space-y-5">
+      
+      <!-- Agents Panel -->
+      <div class="card p-5">
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4 flex items-center gap-2">
+          <i data-lucide="users" class="w-4 h-4"></i>
+          Agent Status
+          <span class="ml-auto text-xs text-slate-300 font-normal" id="agent-count">0 agents</span>
+        </div>
+        <div id="agents-panel">
+          <div class="text-center text-slate-400 py-6">加载中...</div>
+        </div>
+      </div>
+      
+      <!-- System Monitor - 恢复 -->
+      <div class="card p-5">
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4 flex items-center gap-2">
+          <i data-lucide="cpu" class="w-4 h-4"></i>
+          System Monitor
+        </div>
+        
+        <div class="space-y-3">
+          <!-- CPU -->
+          <div class="sys-monitor">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-slate-500">CPU</span>
+              <span class="text-sm font-mono font-semibold" id="cpu-percent">0%</span>
+            </div>
+            <div class="bar-progress">
+              <div class="bar-fill" id="cpu-bar" style="width:0%;background:linear-gradient(90deg,#6b7cde,#8b6dd4)"></div>
+            </div>
+          </div>
+          
+          <!-- Memory -->
+          <div class="sys-monitor">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-slate-500">Memory</span>
+              <span class="text-sm font-mono font-semibold" id="mem-percent">0%</span>
+            </div>
+            <div class="bar-progress">
+              <div class="bar-fill" id="mem-bar" style="width:0%;background:linear-gradient(90deg,#5bb085,#4a9d7a)"></div>
+            </div>
+          </div>
+          
+          <!-- Network -->
+          <div class="sys-monitor">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-slate-500">Network</span>
+              <span class="text-sm font-mono font-semibold" id="net-speed">0 KB/s</span>
+            </div>
+            <div class="bar-progress">
+              <div class="bar-fill" id="net-bar" style="width:0%;background:linear-gradient(90deg,#d4a853,#c4994a)"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Blackboard -->
+      <div class="card p-5" id="blackboard-section" style="display:none">
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-4 flex items-center gap-2">
+          <i data-lucide="clipboard-list" class="w-4 h-4"></i>
+          Blackboard
+        </div>
+        <div class="space-y-2" id="blackboard-panel"></div>
+      </div>
+      
+    </div>
+    
+    <!-- Right: Activity Log -->
+    <div class="card p-5">
+      <div class="flex items-center justify-between mb-4">
+        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-2">
+          <i data-lucide="terminal" class="w-4 h-4"></i>
+          Activity Log
+        </div>
+        <button class="text-xs text-slate-400 hover:text-slate-600" onclick="$('activity-log').innerHTML = ''">清空</button>
+      </div>
+      <div class="log-panel h-[550px] overflow-auto" id="activity-log">
+        <div class="text-slate-400 text-center py-6 text-sm">等待活动...</div>
+      </div>
+    </div>
+    
+  </div>
+</div>
+
+<script>
+lucide.createIcons();
+let lastLogCount = 0;
+
+function $(id) { return document.getElementById(id); }
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function formatTime(seconds) {
+  if (seconds < 60) return Math.floor(seconds) + 's';
+  if (seconds < 3600) return Math.floor(seconds / 60) + 'm ' + Math.floor(seconds % 60) + 's';
+  return Math.floor(seconds / 3600) + 'h ' + Math.floor((seconds % 3600) / 60) + 'm';
+}
+
+
+// Agent colors
+const AGENT_COLORS = {
+  ceo: '#6b7cde',
+  coordinator: '#6b7cde',
+  kimi: '#10b981',
+  glm: '#f59e0b',
+  minimax: '#ec4899'
+};
+
+function createCircleProgress(percentage, size = 65, strokeWidth = 5, color = '#8b6dd4') {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (percentage / 100) * circumference;
+  
+  return `
+    <div class="circle-progress" style="width:${size}px;height:${size}px">
+      <svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
+        <circle class="progress-bg" cx="${size/2}" cy="${size/2}" r="${radius}" stroke-width="${strokeWidth}"/>
+        <circle class="progress-bar" cx="${size/2}" cy="${size/2}" r="${radius}" stroke-width="${strokeWidth}" 
+          stroke="${color}" 
+          stroke-dasharray="${circumference}" 
+          stroke-dashoffset="${offset}"/>
+      </svg>
+      <div class="progress-text" style="font-size:${size/4}px;color:#4a5568">${Math.round(percentage)}%</div>
+    </div>
+  `;
+}
+
+async function fetchStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const data = await r.json();
+    
+    $('total-tokens').textContent = (data.tokens || 0).toLocaleString();
+    
+    const activeCount = Object.values(data.agents || {}).filter(a => a.status === 'running').length;
+    $('active-agents').textContent = activeCount;
+    
+    const bbCount = Object.keys(data.blackboard || {}).length;
+    $('bb-count').textContent = bbCount;
+    
+    if (data.start_time && data.running) {
+      const runtime = Date.now() / 1000 - data.start_time;
+      $('runtime').textContent = formatTime(runtime);
+    }
+    
+    // Update system monitor - 恢复
+    if (data.system) {
+      const cpu = data.system.cpu?.total || 0;
+      const mem = data.system.memory?.percent || 0;
+      const net = (data.system.network?.upload_speed || 0) + (data.system.network?.download_speed || 0);
+      
+      $('cpu-percent').textContent = cpu.toFixed(1) + '%';
+      $('cpu-bar').style.width = cpu + '%';
+      
+      $('mem-percent').textContent = mem.toFixed(1) + '%';
+      $('mem-bar').style.width = mem + '%';
+      
+      $('net-speed').textContent = formatBytes(net) + '/s';
+      $('net-bar').style.width = Math.min(net / 1000, 100) + '%';
+    }
+    
+    updateAgents(data.agents);
+    checkAgentChanges(data.agents);
+    
+    // Logs
+    if (data.log && data.log.length > 0) {
+      const logContainer = $('activity-log');
+      
+      if (lastLogCount === 0 || data.log.length < lastLogCount) {
+        const html = data.log.slice(-50).map(log => {
+          let cls = '';
+          if (log.includes('✓') || log.includes('完成')) cls = 'success';
+          else if (log.includes('✗') || log.includes('失败')) cls = 'error';
+          else if (log.includes('⚠')) cls = 'warning';
+          else if (log.includes('[')) cls = 'info';
+          return `<div class="log-line ${cls}">${escapeHtml(log)}</div>`;
+        }).join('');
+        logContainer.innerHTML = html;
+      } else {
+        const newLogs = data.log.slice(lastLogCount);
+        if (newLogs.length > 0) {
+          newLogs.forEach(log => {
+            let cls = '';
+            if (log.includes('✓') || log.includes('完成')) cls = 'success';
+            else if (log.includes('✗') || log.includes('失败')) cls = 'error';
+            else if (log.includes('⚠')) cls = 'warning';
+            else if (log.includes('[')) cls = 'info';
+            const div = document.createElement('div');
+            div.className = `log-line ${cls}`;
+            div.textContent = log;
+            logContainer.appendChild(div);
+            while (logContainer.children.length > 50) {
+              logContainer.removeChild(logContainer.firstChild);
+            }
+          });
+        }
+      }
+      
+      lastLogCount = data.log.length;
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+    
+    // Blackboard
+    if (bbCount > 0) {
+      $('blackboard-section').style.display = 'block';
+      const bbHtml = Object.entries(data.blackboard).map(([key, value]) => {
+        const content = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+        return `<div class="bg-slate-50 rounded-xl p-3">
+          <div class="text-xs font-semibold text-indigo-600 mb-1">${escapeHtml(key)}</div>
+          <div class="text-xs text-slate-600 max-h-24 overflow-auto">${escapeHtml(content.substring(0, 400))}</div>
+        </div>`;
+      }).join('');
+      $('blackboard-panel').innerHTML = bbHtml;
+    } else {
+      $('blackboard-section').style.display = 'none';
+    }
+    
+  } catch (e) { 
+    console.error(e);
+  }
+}
+
+function updateAgents(agentData) {
+  const count = Object.keys(agentData || {}).length;
+  $('agent-count').textContent = count + ' agents';
+  
+  const statusColors = {
+    running: '#d4a853',
+    done: '#5bb085',
+    idle: '#a0aec0',
+    error: '#e57373'
+  };
+  
+  let html = '';
+  for (const [id, agent] of Object.entries(agentData || {})) {
+    const status = agent.status || 'idle';
+    const ratio = agent.ctx_ratio || 0;
+    const tokens = agent.total_tokens || 0;
+    const statusColor = statusColors[status] || '#a0aec0';
+    const agentColor = AGENT_COLORS[id] || '#8b6dd4';
+    
+    html += `<div class="agent-row">`;
+    html += `<div class="flex items-center gap-4">`;
+    html += createCircleProgress(ratio, 60, 4, agentColor);
+    html += `<div class="flex-1">`;
+    html += `<div class="flex items-center justify-between mb-1">`;
+    html += `<span class="font-bold">${agent.name}</span>`;
+    html += `<span class="status-dot ${status}"></span>`;
+    html += `</div>`;
+    html += `<div class="text-xs text-slate-500 mb-1">${agent.role || ''}</div>`;
+    html += `<div class="flex items-center gap-3 text-xs text-slate-400">`;
+    html += `<span>${agent.provider}/${agent.model}</span>`;
+    html += `<span>${tokens.toLocaleString()} tokens</span>`;
+    html += `</div>`;
+    html += `</div>`;
+    html += `</div>`;
+    html += `</div>`;
+  }
+  
+  $('agents-panel').innerHTML = html || '<div class="text-center text-slate-400 py-6 text-sm">无Agent</div>';
+  lucide.createIcons();
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+setInterval(fetchStatus, 1000);
+fetchStatus();
+
+// 实时更新Agent状态变化
+let lastAgentStates = {};
+
+function checkAgentChanges(agents) {
+  for (const [id, agent] of Object.entries(agents || {})) {
+    const lastState = lastAgentStates[id];
+    
+    if (lastState && lastState.status !== agent.status) {
+      // 状态变化，添加日志
+      const logContainer = $('activity-log');
+      const time = new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      const msg = `[${time}] [${agent.name}] 状态变化: ${lastState.status} → ${agent.status}`;
+      
+      const div = document.createElement('div');
+      div.className = 'log-line info';
+      div.textContent = msg;
+      logContainer.appendChild(div);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+    
+    lastAgentStates[id] = {status: agent.status, tokens: agent.total_tokens};
+  }
+}
+</script>
+</body>
+</html>

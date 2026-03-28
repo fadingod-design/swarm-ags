@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>蜂群AGS - 智能协作平台</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', -apple-system, sans-serif; background: linear-gradient(135deg, #e8ecf1 0%, #d4dce6 50%, #c9d3df 100%); color: #2d3748; min-height: 100vh; }
+.card { background: rgba(255,255,255,0.75); backdrop-filter: blur(15px); border-radius: 18px; border: 1px solid rgba(255,255,255,0.6); box-shadow: 0 2px 15px rgba(0,0,0,0.04); }
+.gradient-primary { background: linear-gradient(135deg, #6b7cde 0%, #8b6dd4 100%); }
+.status-dot { width: 9px; height: 9px; border-radius: 50%; }
+.status-dot.running { background: #d4a853; animation: pulse 2s infinite; }
+.status-dot.done { background: #5bb085; }
+.status-dot.idle { background: #a0aec0; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+.btn { padding: 11px 22px; border-radius: 11px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 7px; }
+.btn-primary { background: linear-gradient(135deg, #6b7cde 0%, #8b6dd4 100%); color: white; }
+.btn-secondary { background: rgba(255,255,255,0.7); color: #4a5568; border: 1px solid rgba(0,0,0,0.08); }
+.input { width: 100%; padding: 12px 16px; border: 1px solid rgba(0,0,0,0.08); border-radius: 12px; font-size: 14px; background: rgba(255,255,255,0.7); }
+.input:focus { outline: none; border-color: #8b6dd4; }
+.log-panel { background: rgba(255,255,255,0.4); border-radius: 12px; font-family: monospace; font-size: 12px; overflow: auto; }
+.log-line { padding: 9px 13px; border-bottom: 1px solid rgba(0,0,0,0.02); color: #6b7280; }
+.log-line.info { color: #6b7cde; }
+.log-line.success { color: #5bb085; }
+.log-line.error { color: #e57373; }
+.tab { padding: 11px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; background: transparent; border: none; color: #718096; }
+.tab.active { background: rgba(255,255,255,0.9); color: #6b7cde; }
+.agent-card { padding: 14px; border-radius: 14px; background: rgba(255,255,255,0.5); border: 2px solid transparent; cursor: pointer; transition: all 0.2s; }
+.agent-card.selected { background: rgba(255,255,255,0.95); border-color: #8b6dd4; }
+.agent-card:hover { background: rgba(255,255,255,0.8); }
+.chat-bubble { max-width: 82%; padding: 12px 16px; border-radius: 16px; font-size: 14px; }
+.chat-bubble.user { background: linear-gradient(135deg, #6b7cde 0%, #8b6dd4 100%); color: white; margin-left: auto; }
+.chat-bubble.agent { background: rgba(255,255,255,0.85); color: #2d3748; }
+
+/* Network Visualization */
+#network-viz { position: relative; height: 220px; background: linear-gradient(180deg, rgba(107,124,222,0.03) 0%, rgba(236,72,153,0.03) 100%); border-radius: 16px; border: 1px solid rgba(0,0,0,0.05); overflow: hidden; }
+#network-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+.agent-node-viz { position: absolute; display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -50%); transition: all 0.3s ease; cursor: pointer; }
+.agent-node-viz:hover { transform: translate(-50%, -50%) scale(1.15); }
+.agent-node-viz .shape-container { width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; position: relative; }
+.agent-node-viz .shape-container::before { content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle, currentColor 0%, transparent 70%); opacity: 0.1; }
+.agent-node-viz.running .shape-container::before { animation: node-active 1.2s ease-in-out infinite; }
+@keyframes node-active { 0%, 100% { transform: scale(1); opacity: 0.2; } 50% { transform: scale(1.4); opacity: 0.4; } }
+.agent-node-viz .name { font-size: 10px; font-weight: 600; margin-top: 4px; letter-spacing: 0.3px; text-shadow: 0 1px 2px rgba(255,255,255,0.8); }
+.agent-node-viz .tokens { font-size: 8px; color: #94a3b8; margin-top: 1px; }
+
+/* Message Flow */
+.message-flow { position: relative; padding: 12px 16px; background: rgba(255,255,255,0.6); border-radius: 12px; margin-bottom: 8px; animation: slideInLeft 0.4s ease-out; overflow: hidden; }
+.message-flow::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--agent-color, #8b6dd4); animation: pulseBar 2s ease-in-out infinite; }
+@keyframes slideInLeft { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes pulseBar { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.agent-ceo { --agent-color: #6b7cde; }
+.agent-kimi { --agent-color: #10b981; }
+.agent-glm { --agent-color: #f59e0b; }
+.agent-minimax { --agent-color: #ec4899; }
+.agent-system { --agent-color: #64748b; }
+</style>
+</head>
+<body>
+<div class="max-w-[1700px] mx-auto p-5">
+  <header class="card p-5 mb-5">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center shadow-md">
+          <i data-lucide="brain" class="w-6 h-6 text-white"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold" style="color:#6b7cde">蜂群AGS</h1>
+          <p class="text-xs text-slate-500">智能协作平台 · 支持联网搜索</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="status-dot idle" id="system-status"></div>
+        <span class="text-sm" id="system-status-text">空闲</span>
+        <div class="px-3 py-1 rounded-full text-xs font-medium" id="search-status" style="background: rgba(16,185,129,0.1); color: #10b981;">联网已启用</div>
+        <a href="monitor.html" class="btn btn-secondary"><i data-lucide="activity" class="w-4 h-4"></i>监控台</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="grid grid-cols-[280px_1fr_420px] gap-5">
+    <aside class="space-y-4">
+      <div class="card p-4">
+        <div class="text-xs font-semibold text-slate-400 uppercase mb-3">工作流</div>
+        <select class="input" id="workflow">
+          <option value="smart_dispatch">智能调度</option>
+          <option value="pipeline">流水线</option>
+          <option value="parallel">并行研究</option>
+          <option value="quick">快速研究</option>
+        </select>
+      </div>
+      <div class="card p-4">
+        <div class="text-xs font-semibold text-slate-400 uppercase mb-3">Agents</div>
+        <div class="space-y-2" id="agent-list"></div>
+      </div>
+      <div class="card p-4">
+        <div class="text-xs font-semibold text-slate-400 uppercase mb-3">功能状态</div>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between"><span class="text-slate-500">联网搜索</span><span class="text-green-600">已启用</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">阶段执行</span><span class="text-green-600">已启用</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="space-y-4">
+      <div class="flex gap-2 p-1 bg-white/50 rounded-xl">
+        <button class="tab active" id="tab-workflow" onclick="switchTab('workflow')">工作流</button>
+        <button class="tab" id="tab-chat" onclick="switchTab('chat')">广播</button>
+      </div>
+
+      <div id="workflow-mode" class="card p-5">
+        <div class="space-y-3">
+          <input type="text" class="input" id="task" placeholder="任务描述（会自动联网搜索相关信息）">
+          <textarea class="input h-24" id="data" placeholder="附加数据"></textarea>
+          <div class="flex gap-2">
+            <button class="btn btn-primary flex-1" id="run-btn" onclick="runWorkflow()"><i data-lucide="play" class="w-4 h-4"></i>执行</button>
+            <button class="btn btn-secondary" onclick="resetAll()">重置</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="chat-mode" class="card p-5 hidden">
+        <div class="space-y-3">
+          <input type="text" class="input" id="broadcast-task" placeholder="输入任务，广播给所有Agent">
+          <div class="flex gap-2">
+            <button class="btn btn-primary flex-1" onclick="broadcastToAll()">广播</button>
+            <button class="btn btn-secondary" onclick="summarizeAll()">汇总</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Network Visualization -->
+      <div class="card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs font-semibold text-slate-400 uppercase">Agent 网络可视化</div>
+          <button class="text-xs text-slate-400" onclick="clearNetwork()">清空</button>
+        </div>
+        <div id="network-viz">
+          <canvas id="network-canvas"></canvas>
+        </div>
+      </div>
+
+      <!-- Message Flow -->
+      <div class="card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs font-semibold text-slate-400 uppercase">Agent 消息流</div>
+          <button class="text-xs text-slate-400" onclick="clearFlows()">清空</button>
+        </div>
+        <div class="log-panel h-32" id="message-flow"><div class="text-slate-400 text-center py-6 text-sm">等待 Agent 交互...</div></div>
+      </div>
+
+      <!-- Execution Log -->
+      <div class="card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs font-semibold text-slate-400 uppercase">执行日志</div>
+          <button class="text-xs text-slate-400" onclick="clearLog()">清空</button>
+        </div>
+        <div class="log-panel h-48" id="log"><div class="log-line info">[System] 系统就绪</div></div>
+      </div>
+
+      <div class="card p-5 hidden" id="summary-panel">
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-semibold">智能汇总</div>
+          <button class="btn btn-secondary text-xs" onclick="exportSummary()">导出</button>
+        </div>
+        <div class="log-panel max-h-72 p-3 text-sm" id="summary-content"></div>
+      </div>
+    </main>
+
+    <aside class="card flex flex-col h-[calc(100vh-160px)] overflow-hidden">
+      <div class="p-4 border-b border-slate-100">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 gradient-primary rounded-lg flex items-center justify-center"><i data-lucide="bot" class="w-5 h-5 text-white"></i></div>
+          <div>
+            <div class="font-semibold text-sm" id="chat-agent-name">选择Agent</div>
+            <div class="text-xs text-slate-400" id="chat-agent-model">点击左侧开始对话</div>
+          </div>
+        </div>
+      </div>
+      <div class="flex-1 overflow-auto p-4 space-y-3" id="chat-messages">
+        <div class="text-center text-slate-400 py-16"><i data-lucide="message-circle" class="w-12 h-12 mx-auto mb-3 opacity-20"></i><p class="text-sm">点击左侧Agent开始对话</p></div>
+      </div>
+      <div class="p-4 border-t border-slate-100">
+        <div class="flex gap-2">
+          <input type="text" class="input flex-1" id="chat-input" placeholder="输入消息" onkeypress="if(event.key==='Enter')sendChat()">
+          <button class="btn btn-primary" onclick="sendChat()" id="send-btn"><i data-lucide="send" class="w-4 h-4"></i></button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+lucide.createIcons();
+
+// Agent Visualization Config
+const AGENT_VIZ_CONFIG = {
+  ceo: { name: 'CEO', color: '#6b7cde', sides: 6, gradient: ['#818cf8', '#6366f1'] },
+  kimi: { name: 'Kimi', color: '#10b981', sides: 5, gradient: ['#34d399', '#10b981'] },
+  glm: { name: 'GLM', color: '#f59e0b', sides: 4, gradient: ['#fbbf24', '#f59e0b'] },
+  minimax: { name: 'MiniMax', color: '#ec4899', sides: 8, gradient: ['#f472b6', '#ec4899'] }
+};
+
+const NODE_POSITIONS = {
+  ceo: { x: 0.5, y: 0.22 },
+  kimi: { x: 0.22, y: 0.65 },
+  glm: { x: 0.78, y: 0.65 },
+  minimax: { x: 0.5, y: 0.88 }
+};
+
+let networkCanvas, networkCtx, nodeElements = {}, connectionAnimations = [];
+let currentAgent = null, agents = {}, timer = null;
+
+function $(id) { return document.getElementById(id); }
+
+// Initialize Network Visualization
+function initNetworkViz() {
+  const container = $('network-viz');
+  networkCanvas = $('network-canvas');
+  if (!container || !networkCanvas) return;
+  
+  const rect = container.getBoundingClientRect();
+  networkCanvas.width = rect.width * 2;
+  networkCanvas.height = rect.height * 2;
+  networkCanvas.style.width = rect.width + 'px';
+  networkCanvas.style.height = rect.height + 'px';
+  networkCtx = networkCanvas.getContext('2d');
+  networkCtx.scale(2, 2);
+  
+  // Create agent nodes
+  for (const [id, config] of Object.entries(AGENT_VIZ_CONFIG)) {
+    const pos = NODE_POSITIONS[id];
+    const node = document.createElement('div');
+    node.className = 'agent-node-viz';
+    node.id = 'viz-' + id;
+    node.style.left = (pos.x * 100) + '%';
+    node.style.top = (pos.y * 100) + '%';
+    node.style.color = config.color;
+    node.innerHTML = `
+      <div class="shape-container"><svg width="44" height="44" viewBox="0 0 44 44">
+        <defs><linearGradient id="grad-${id}" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:${config.gradient[0]}" />
+          <stop offset="100%" style="stop-color:${config.gradient[1]}" />
+        </linearGradient></defs>
+        ${createPolygonSVG(config.sides, id)}
+      </svg></div>
+      <div class="name">${config.name}</div>
+      <div class="tokens" id="tokens-${id}">0</div>
+    `;
+    container.appendChild(node);
+    nodeElements[id] = node;
+  }
+  requestAnimationFrame(renderLoop);
+}
+
+function createPolygonSVG(sides, id) {
+  const points = [];
+  for (let i = 0; i < sides; i++) {
+    const angle = (i * 2 * Math.PI / sides) - Math.PI / 2;
+    points.push(`${(22 + 18 * Math.cos(angle)).toFixed(1)},${(22 + 18 * Math.sin(angle)).toFixed(1)}`);
+  }
+  return `<polygon points="${points.join(' ')}" fill="url(#grad-${id})" stroke="white" stroke-width="1.5" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));" />`;
+}
+
+function drawConnection(fromId, toId) {
+  const from = NODE_POSITIONS[fromId];
+  const to = NODE_POSITIONS[toId];
+  if (!from || !to) return;
+  
+  const rect = networkCanvas.getBoundingClientRect();
+  const anim = {
+    x1: from.x * rect.width, y1: from.y * rect.height,
+    x2: to.x * rect.width, y2: to.y * rect.height,
+    fromColor: AGENT_VIZ_CONFIG[fromId].color,
+    toColor: AGENT_VIZ_CONFIG[toId].color,
+    progress: 0, startTime: Date.now(), duration: 600, particles: []
+  };
+  connectionAnimations.push(anim);
+  for (let i = 0; i < 3; i++) {
+    setTimeout(() => anim.particles.push({ progress: 0, speed: 0.015 + Math.random() * 0.01 }), i * 100);
+  }
+  setTimeout(() => { const idx = connectionAnimations.indexOf(anim); if (idx > -1) connectionAnimations.splice(idx, 1); }, 4000);
+}
+
+function renderLoop() {
+  if (!networkCtx) return;
+  const rect = networkCanvas.getBoundingClientRect();
+  networkCtx.clearRect(0, 0, rect.width, rect.height);
+  
+  for (const anim of connectionAnimations) {
+    anim.progress = Math.min(1, (Date.now() - anim.startTime) / anim.duration);
+    networkCtx.beginPath();
+    networkCtx.moveTo(anim.x1, anim.y1);
+    networkCtx.quadraticCurveTo((anim.x1 + anim.x2) / 2, (anim.y1 + anim.y2) / 2 - 20, 
+      anim.x1 + (anim.x2 - anim.x1) * anim.progress, anim.y1 + (anim.y2 - anim.y1) * anim.progress);
+    const gradient = networkCtx.createLinearGradient(anim.x1, anim.y1, anim.x2, anim.y2);
+    gradient.addColorStop(0, anim.fromColor + '80');
+    gradient.addColorStop(1, anim.toColor + '80');
+    networkCtx.strokeStyle = gradient;
+    networkCtx.lineWidth = 2;
+    networkCtx.stroke();
+    
+    for (const p of anim.particles) {
+      p.progress += p.speed;
+      if (p.progress > 1) p.progress = 0;
+      const px = anim.x1 + (anim.x2 - anim.x1) * p.progress;
+      const py = anim.y1 + (anim.y2 - anim.y1) * p.progress - 20 * Math.sin(p.progress * Math.PI);
+      networkCtx.beginPath();
+      networkCtx.arc(px, py, 3, 0, Math.PI * 2);
+      networkCtx.fillStyle = anim.fromColor;
+      networkCtx.fill();
+    }
+  }
+  requestAnimationFrame(renderLoop);
+}
+
+function updateNodeStatus(agentId, status, tokens) {
+  const node = nodeElements[agentId];
+  if (!node) return;
+  node.classList.remove('running', 'idle', 'done');
+  if (status === 'running') node.classList.add('running');
+  else node.classList.add(status === 'done' ? 'done' : 'idle');
+  const tokensEl = $('tokens-' + agentId);
+  if (tokensEl && tokens) tokensEl.textContent = tokens > 1000 ? (tokens/1000).toFixed(1) + 'k' : tokens;
+}
+
+function addMessageFlow(from, to, content) {
+  const flowContainer = $('message-flow');
+  const agentClass = 'agent-' + from.toLowerCase();
+  const fromColor = AGENT_VIZ_CONFIG[from.toLowerCase()] || { color: '#64748b' };
+  const flowHtml = `<div class="message-flow ${agentClass}" style="--agent-color: ${fromColor.color}">
+    <div class="flex items-center gap-2 text-xs"><span class="font-semibold" style="color:${fromColor.color}">${from}</span>
+    <span class="text-slate-400">→</span><span>${to}</span></div>
+    <div class="text-xs text-slate-600 mt-1">${escapeHtml(content.substring(0, 80))}${content.length > 80 ? '...' : ''}</div></div>`;
+  if (flowContainer.querySelector('.text-center')) flowContainer.innerHTML = '';
+  flowContainer.innerHTML += flowHtml;
+  flowContainer.scrollTop = flowContainer.scrollHeight;
+  while (flowContainer.children.length > 20) flowContainer.removeChild(flowContainer.firstChild);
+}
+
+function clearNetwork() { connectionAnimations = []; if (networkCtx) networkCtx.clearRect(0, 0, networkCanvas.width, networkCanvas.height); }
+function clearFlows() { $('message-flow').innerHTML = '<div class="text-slate-400 text-center py-6 text-sm">等待 Agent 交互...</div>'; }
+
+// Tab switching
+function switchTab(m) {
+  $('tab-chat').classList.toggle('active', m === 'chat');
+  $('tab-workflow').classList.toggle('active', m === 'workflow');
+  $('chat-mode').classList.toggle('hidden', m !== 'chat');
+  $('workflow-mode').classList.toggle('hidden', m !== 'workflow');
+  lucide.createIcons();
+}
+
+// Agent selection
+function selectAgent(id) {
+  currentAgent = id;
+  document.querySelectorAll('.agent-card').forEach(c => c.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+  $('chat-agent-name').textContent = agents[id].name;
+  $('chat-agent-model').textContent = agents[id].provider + '/' + agents[id].model;
+  lucide.createIcons();
+  loadChatHistory(id);
+}
+
+async function loadChatHistory(id) {
+  try {
+    const r = await fetch('/api/agent/' + id + '/history');
+    const d = await r.json();
+    let h = '';
+    if (d.messages && d.messages.length > 1) {
+      for (let i = 1; i < d.messages.length; i++) {
+        const m = d.messages[i];
+        h += '<div class="chat-bubble ' + (m.role === 'user' ? 'user' : 'agent') + '">' + escapeHtml(m.content) + '</div>';
+      }
+    } else {
+      h = '<div class="text-center text-slate-400 py-16"><p class="text-sm">开始对话</p></div>';
+    }
+    $('chat-messages').innerHTML = h;
+    $('chat-messages').scrollTop = $('chat-messages').scrollHeight;
+  } catch (e) {}
+}
+
+function updateAgents(d) {
+  agents = d;
+  let h = '';
+  for (const [id, a] of Object.entries(d || {})) {
+    const s = a.status || 'idle';
+    h += `<div class="agent-card ${currentAgent === id ? 'selected' : ''}" onclick="selectAgent('${id}')">
+      <div class="flex items-center justify-between mb-2"><span class="font-semibold text-sm">${a.name}</span>
+      <span class="status-dot ${s}"></span></div>
+      <div class="text-xs text-slate-500">${a.provider || ''}</div>
+      <div class="text-xs text-slate-400 mt-1">${(a.total_tokens || 0).toLocaleString()} tokens</div></div>`;
+  }
+  $('agent-list').innerHTML = h || '<div class="text-center text-slate-400 py-3 text-sm">无Agent</div>';
+  
+  // Update network nodes
+  for (const [id, a] of Object.entries(d || {})) {
+    updateNodeStatus(id, a.status, a.total_tokens);
+  }
+}
+
+// Track state changes for visualization
+let prevStates = {};
+function trackStateChanges(newAgents) {
+  for (const [id, agent] of Object.entries(newAgents || {})) {
+    const prev = prevStates[id];
+    const curr = agent.status;
+    if (prev && prev !== curr) {
+      if (curr === 'running') {
+        drawConnection('ceo', id);
+        addMessageFlow('CEO', agent.name, '开始执行任务');
+      } else if (curr === 'done') {
+        drawConnection(id, 'ceo');
+        addMessageFlow(agent.name, 'CEO', '任务完成');
+      }
+    }
+    prevStates[id] = curr;
+  }
+}
+
+async function sendChat() {
+  if (!currentAgent) { alert('请先选择Agent'); return; }
+  const i = $('chat-input'), m = i.value.trim();
+  if (!m) return;
+  i.value = '';
+  $('send-btn').disabled = true;
+  $('chat-messages').innerHTML += '<div class="chat-bubble user">' + escapeHtml(m) + '</div>';
+  $('chat-messages').innerHTML += '<div class="chat-bubble agent opacity-50" id="thinking">处理中...</div>';
+  $('chat-messages').scrollTop = $('chat-messages').scrollHeight;
+  
+  try {
+    const r = await fetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({agent: currentAgent, message: m}) });
+    const d = await r.json();
+    $('thinking')?.remove();
+    if (d.content) {
+      $('chat-messages').innerHTML += '<div class="chat-bubble agent">' + escapeHtml(d.content) + '</div>';
+      addMessageFlow(agents[currentAgent].name, 'You', d.content.substring(0, 50));
+    }
+  } catch (e) { $('thinking')?.remove(); addLog('对话失败: ' + e.message, 'error'); }
+  $('send-btn').disabled = false;
+  fetchStatus();
+}
+
+async function runWorkflow() {
+  const t = $('task').value.trim();
+  if (!t) return alert('请输入任务');
+  $('run-btn').disabled = true;
+  $('summary-panel').classList.add('hidden');
+  $('log').innerHTML = '';
+  clearNetwork();
+  clearFlows();
+  updateSystemStatus('running', '运行中');
+  addLog('执行: ' + $('workflow').value, 'info');
+  addMessageFlow('User', 'All', t);
+  try {
+    await fetch('/api/run', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({workflow: $('workflow').value, task: t, data: $('data').value}) });
+  } catch (e) { $('run-btn').disabled = false; updateSystemStatus('idle', '空闲'); addLog('启动失败', 'error'); }
+}
+
+function clearLog() { $('log').innerHTML = '<div class="log-line info">[System] 已清空</div>'; }
+async function resetAll() { if (timer) clearInterval(timer); timer = null; await fetch('/api/reset', {method: 'POST'}); $('log').innerHTML = '<div class="log-line info">[System] 已重置</div>'; $('summary-panel').classList.add('hidden'); $('run-btn').disabled = false; updateSystemStatus('idle', '空闲'); clearNetwork(); clearFlows(); fetchStatus(); }
+function exportSummary() { const c = $('summary-content').textContent, a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([c], {type: 'text/plain'})); a.download = 'summary.txt'; a.click(); }
+function addLog(m, t = '') { const d = new Date().toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit', second: '2-digit'}); $('log').innerHTML += `<div class="log-line ${t}">[${d}] ${m}</div>`; $('log').scrollTop = $('log').scrollHeight; }
+function updateSystemStatus(s, t) { $('system-status').className = 'status-dot ' + s; $('system-status-text').textContent = t; }
+
+let lastLogCount = 0;
+async function fetchStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    trackStateChanges(d.agents);
+    updateAgents(d.agents);
+    if (d.log && d.log.length > 0) {
+      if (d.log.length < lastLogCount) lastLogCount = 0;
+      for (const l of d.log.slice(lastLogCount)) {
+        let t = '';
+        if (l.includes('success') || l.includes('done')) t = 'success';
+        else if (l.includes('error') || l.includes('fail')) t = 'error';
+        else if (l.includes('[')) t = 'info';
+        addLog(l, t);
+      }
+      lastLogCount = d.log.length;
+    }
+    if (!d.running && timer) { clearInterval(timer); timer = null; $('run-btn').disabled = false; updateSystemStatus('done', '完成'); addLog('工作流执行完成', 'success'); }
+  } catch (e) {}
+}
+
+function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+// Initialize
+setTimeout(initNetworkViz, 100);
+fetchStatus();
+</script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+{
+  "version": "4.5.0",
+  "name": "蜂群AGS V4.5.0 - 增强版",
+  "providers": {
+    "qianfan": {
+      "url": "https://qianfan.baidubce.com/v2/coding/chat/completions",
+      "key": "${QIANFAN_API_KEY}"
+    },
+    "infini": {
+      "url": "https://cloud.infini-ai.com/maas/coding/v1/chat/completions",
+      "key": "${INFINI_API_KEY}"
+    }
+  },
+  "tools": {
+    "proxy_url": "http://localhost:8768"
+  },
+  "agents": {
+    "coordinator": {
+      "name": "CEO",
+      "provider": "qianfan",
+      "model": "glm-5",
+      "capabilities": [
+        "决策",
+        "规划",
+        "调度",
+        "质检",
+        "审核"
+      ],
+      "prompt": "你是蜂群科技CEO，负责项目把控和团队调度。\n\n## 可用团队成员\n- **Kimi**: 搜索专家，擅长信息收集、数据挖掘、实时信息获取\n- **GLM**: 分析专家，擅长数据分析、逻辑推理、技术实现  \n- **MiniMax**: 写作专家，擅长内容创作、文案优化、报告撰写\n\n## 你的职责\n1. 分析任务，判断需要哪些能力\n2. **只分配必要的 Agent**，简单的任务可以只给 1 个 Agent\n3. 如果任务有依赖关系，分阶段执行\n\n## 输出格式（必须严格遵守）\n```json\n{\n  \"analysis\": \"任务分析：...\",\n  \"phases\": [\n    {\n      \"phase\": 1,\n      \"parallel\": false,\n      \"agents\": [\"kimi\"],\n      \"tasks\": {\n        \"kimi\": \"具体任务内容\"\n      }\n    },\n    {\n      \"phase\": 2,\n      \"parallel\": false,\n      \"agents\": [\"glm\"],\n      \"tasks\": {\n        \"glm\": \"分析 Kimi 收集的数据\"\n      }\n    },\n    {\n      \"phase\": 3,\n      \"parallel\": false,\n      \"agents\": [\"minimax\"],\n      \"tasks\": {\n        \"minimax\": \"整合所有结果，生成最终报告\"\n      }\n    }\n  ]\n}\n```\n\n## 阶段规则\n- **phase**: 数字，从小到大执行\n- **parallel**: true 表示同阶段内并行，false 表示串行\n- **agents**: 这个阶段需要执行的 agent 列表\n- **tasks**: 每个 agent 的具体任务\n\n## 分配原则\n1. **最小化原则**：简单任务只给 1 个最合适的 Agent\n2. **阶段原则**：有依赖的任务分阶段（如：收集→分析→整合）\n3. **并行原则**：完全独立的任务可以在同一阶段并行\n\n## 示例场景\n\n### 场景1：简单问题（只给1个Agent）\n```json\n{\n  \"analysis\": \"这是一个简单的翻译任务\",\n  \"phases\": [\n    {\n      \"phase\": 1,\n      \"parallel\": false,\n      \"agents\": [\"minimax\"],\n      \"tasks\": {\"minimax\": \"翻译这段文字\"}\n    }\n  ]\n}\n```\n\n### 场景2：有依赖的复杂任务（分阶段串行）\n```json\n{\n  \"analysis\": \"需要先收集数据，再分析，最后整合\",\n  \"phases\": [\n    {\"phase\": 1, \"parallel\": false, \"agents\": [\"kimi\"], \"tasks\": {\"kimi\": \"收集数据\"}},\n    {\"phase\": 2, \"parallel\": false, \"agents\": [\"glm\"], \"tasks\": {\"glm\": \"分析数据\"}},\n    {\"phase\": 3, \"parallel\": false, \"agents\": [\"minimax\"], \"tasks\": {\"minimax\": \"写报告\"}}\n  ]\n}\n```\n\n### 场景3：独立任务（并行）\n```json\n{\n  \"analysis\": \"三个独立的任务，可以同时执行\",\n  \"phases\": [\n    {\n      \"phase\": 1,\n      \"parallel\": true,\n      \"agents\": [\"kimi\", \"glm\", \"minimax\"],\n      \"tasks\": {\n        \"kimi\": \"搜索 A 主题\",\n        \"glm\": \"写一段代码\",\n        \"minimax\": \"写一篇文案\"\n      }\n    }\n  ]\n}\n```",
+      "context": {
+        "max_tokens": 50000,
+        "strategy": "sliding_window"
+      }
+    },
+    "kimi": {
+      "name": "Kimi",
+      "provider": "infini",
+      "model": "kimi-k2.5",
+      "capabilities": [
+        "联网搜索",
+        "信息收集",
+        "资料整理",
+        "内容审核",
+        "质量把关"
+      ],
+      "prompt": "你是Kimi，拥有强大的联网搜索和信息处理能力。\n\n【核心能力】\n- 联网搜索：快速获取最新信息\n- 信息收集：整理资料、提取关键点\n- 内容审核：检查逻辑、质量把关\n\n【输出要求】\n- 必须使用工具获取实时数据\n- 输出长度必须>=2000字\n- 必须包含具体数据（价格、日期、百分比）\n- 必须有数据来源标注\n\n【格式要求】\n```\n【角色】：xxx\n【数据来源】：xxx\n【核心发现】：\n1. ...\n2. ...\n【详细分析】：\n...（至少1500字）\n【数据表格】：\n| 指标 | 数值 | 变化 |\n【结论】：\n...\n```",
+      "context": {
+        "max_tokens": 100000,
+        "strategy": "compress"
+      }
+    },
+    "glm": {
+      "name": "GLM",
+      "provider": "infini",
+      "model": "glm-5",
+      "capabilities": [
+        "数据分析",
+        "代码开发",
+        "API设计",
+        "逻辑推理",
+        "技术实现"
+      ],
+      "prompt": "你是GLM，拥有强大的分析能力和技术实现能力。\n\n【核心能力】\n- 数据分析：处理数据、生成洞察\n- 代码开发：后端开发、API设计\n- 逻辑推理：复杂问题分析\n- 技术实现：方案落地\n\n【输出要求】\n- 必须使用工具获取实时数据\n- 输出长度必须>=2000字\n- 必须包含具体分析过程\n- 必须有数据可视化建议\n\n【格式要求】\n```\n【角色】：xxx\n【分析方法】：xxx\n【核心数据】：\n1. ...\n2. ...\n【深度分析】：\n...（至少1500字）\n【图表建议】：\n建议生成XXX图表\n【结论】：\n...\n```",
+      "context": {
+        "max_tokens": 80000,
+        "strategy": "compress"
+      }
+    },
+    "minimax": {
+      "name": "MiniMax",
+      "provider": "infini",
+      "model": "minimax-m2.7",
+      "capabilities": [
+        "内容创作",
+        "报告撰写",
+        "文案优化",
+        "文档整理",
+        "创意表达"
+      ],
+      "prompt": "你是MiniMax，拥有强大的内容创作和表达能力。\n\n【核心能力】\n- 内容创作：文章撰写、故事创作\n- 报告撰写：整理报告、结构化输出\n- 文案优化：润色、美化\n- 创意表达：创意构思\n\n【输出要求】\n- 必须汇总所有Agent的发现\n- 输出长度必须>=3000字\n- 必须包含结构化内容（表格、列表）\n- 必须有明确的结论和建议\n\n【格式要求】\n```\n# 标题\n\n## 一、XXX\n...\n\n## 二、XXX\n...\n\n| 项目 | 数值 | 说明 |\n|------|------|------|\n| ... | ... | ... |\n\n## 结论与建议\n...\n```\n\n【禁止事项】\n- 不要输出过短的内容\n- 不要遗漏关键数据\n- 不要使用模糊表述",
+      "context": {
+        "max_tokens": 100000,
+        "strategy": "compress"
+      }
+    }
+  },
+  "workflows": {
+    "smart_dispatch": {
+      "name": "智能调度",
+      "description": "CEO分析任务后动态分配角色",
+      "steps": [
+        {
+          "agent": "coordinator",
+          "action": "analyze_and_dispatch"
+        }
+      ],
+      "output": "coordinator"
+    }
+  },
+  "communication": {
+    "blackboard": {
+      "enabled": true,
+      "max_entries": 100,
+      "ttl_seconds": 3600
+    }
+  },
+  "context": {
+    "default_max_tokens": 100000,
+    "warning_threshold": 0.7,
+    "compress_threshold": 0.85,
+    "keep_messages": 6,
+    "min_output_length": 2000
+  }
+}
