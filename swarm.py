@@ -959,9 +959,39 @@ class SwarmOrchestrator:
                     if agent_id in self.state.get("results", {}):
                         all_results[agent_id] = self.state["results"][agent_id].get("content", "")
 
-        # 5. 整合结果
-        final_output = self._integrate_results()
-        self.log(f"[Done] 完成，输出 {len(final_output)} 字符")
+        # 5. 让 CEO 整合所有 Agent 结果
+        self.log("[CEO] 开始整合所有 Agent 的输出...")
+        
+        # 构建整合提示
+        all_outputs = []
+        for aid, res in self.state.get("results", {}).items():
+            if aid != "coordinator" and res.get("content"):
+                agent = self.agents.get(aid)
+                name = agent.name if agent else aid
+                all_outputs.append(f"## {name} 的输出\n{res['content']}")
+        
+        if all_outputs:
+            integrate_prompt = f"""请整合以下各 Agent 的输出，生成最终报告：
+
+{chr(10).join(all_outputs)}
+
+要求：
+1. 整合所有关键信息
+2. 突出重要发现
+3. 给出清晰的结论
+4. 格式化输出，便于阅读
+"""
+            ceo_result = self.chat_with_agent("coordinator", integrate_prompt)
+            if ceo_result.get("content"):
+                self.state["results"]["ceo_final"] = ceo_result
+                self.state["tokens"] += ceo_result.get("tokens", 0)
+                final_output = ceo_result["content"]
+                self.log(f"[CEO] 整合完成")
+        
+                # 备用：如果没有 CEO 整合结果，使用原方法
+        if 'ceo_final' not in self.state.get('results', {}):
+            final_output = self._integrate_results()
+        self.log(f"[Done] 完成，总 tokens: {self.state['tokens']}")
 
         self.state["selected_agents"] = list(set(selected_agents))
 
