@@ -1,7 +1,6 @@
-﻿{
-    "main":  "swarm.py",
-    "port":  8767,
-    "description":  "蜂群AGS - 多Agent协作系统，圆形进度条UI",
-    "name":  "swarm-ags",
-    "version":  "4.5.0"
+{
+  "name": "swarm-ags",
+  "version": "4.5.2",
+  "description": "蜂群AGS - 多Agent协作平台，支持阶段执行、联网搜索",
+  "main": "swarm.py"
 }
